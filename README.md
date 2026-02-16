@@ -1,4 +1,4 @@
-[Back to Portfolio](https://mwangechi.github.io/Mwangechi-portfolio/)
+[Back to Portfolio](https://mwangechi.github.io/mwangechi.github.io/)
 
 # Automated ETL Framework for Financial Data
 
