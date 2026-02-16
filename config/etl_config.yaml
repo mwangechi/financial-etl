@@ -1,0 +1,82 @@
+pipeline:
+  name: "Financial Data ETL"
+  version: "1.0.0"
+  log_level: "${LOG_LEVEL:-INFO}"
+  batch_size: ${BATCH_SIZE:-1000}
+
+extract:
+  sources:
+    - name: daily_stock_prices
+      type: api
+      base_url: "${API_BASE_URL:-https://www.alphavantage.co/query}"
+      api_key: "${API_KEY:-demo}"
+      function: TIME_SERIES_DAILY
+      symbols:
+        - AAPL
+        - MSFT
+        - GOOGL
+        - AMZN
+        - TSLA
+      params:
+        outputsize: compact  # compact = last 100 days, full = 20+ years
+      rate_limit_per_minute: ${API_RATE_LIMIT_PER_MINUTE:-5}
+      timeout_seconds: ${API_TIMEOUT_SECONDS:-30}
+      max_retries: ${MAX_RETRIES:-3}
+
+    - name: forex_rates
+      type: api
+      base_url: "${API_BASE_URL:-https://www.alphavantage.co/query}"
+      api_key: "${API_KEY:-demo}"
+      function: FX_DAILY
+      pairs:
+        - from: USD
+          to: KES
+        - from: EUR
+          to: USD
+        - from: GBP
+          to: USD
+      params:
+        outputsize: compact
+
+transform:
+  daily_stock_prices:
+    rename_columns:
+      "1. open": open_price
+      "2. high": high_price
+      "3. low": low_price
+      "4. close": close_price
+      "5. volume": volume
+    derived_columns:
+      daily_return: "(close_price - open_price) / open_price"
+      price_range: "high_price - low_price"
+      volatility_pct: "((high_price - low_price) / close_price) * 100"
+
+  forex_rates:
+    rename_columns:
+      "1. open": open_rate
+      "2. high": high_rate
+      "3. low": low_rate
+      "4. close": close_rate
+
+quality:
+  checks:
+    - type: not_null
+      columns: [date, symbol, close_price]
+    - type: range
+      column: close_price
+      min: 0
+      max: 100000
+    - type: range
+      column: volume
+      min: 0
+    - type: unique_composite
+      columns: [date, symbol]
+
+load:
+  postgres:
+    host: "${POSTGRES_HOST:-localhost}"
+    port: ${POSTGRES_PORT:-5432}
+    database: "${POSTGRES_DB:-financial}"
+    user: "${POSTGRES_USER:-etl_user}"
+    password: "${POSTGRES_PASSWORD:-changeme_in_production}"
+    strategy: upsert  # upsert | append | replace
